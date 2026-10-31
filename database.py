@@ -146,3 +146,29 @@ class Database:
         cur = await self.db.execute("SELECT value FROM settings WHERE key=?", (key,))
         row = await cur.fetchone()
         return row[0] if row else default
+
+    
+    async def chapters_with_telegraph_text(self):
+        cur = await self.db.execute(
+            """
+            SELECT chapter_number, text
+            FROM chapters
+            WHERE telegraph_url IS NOT NULL
+              AND text IS NOT NULL
+              AND trim(text) != ''
+            ORDER BY chapter_number
+            """
+        )
+        return await cur.fetchall()
+
+    async def update_chapter_text(self, number, text):
+        await self.db.execute(
+            """
+            UPDATE chapters
+            SET text = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE chapter_number = ?
+            """,
+            (text, number),
+        )
+        await self.db.commit()
