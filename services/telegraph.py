@@ -4,6 +4,8 @@ from urllib.parse import urlparse
 import aiohttp
 from bs4 import BeautifulSoup
 
+from services.text_cleaner import clean_chapter_text
+
 API_URL = "https://api.telegra.ph/getPage/{path}"
 
 
@@ -76,7 +78,9 @@ def _nodes_to_text(nodes):
         result.append(item)
         previous_blank = False
 
-    return "\n\n".join(result).strip()
+    return clean_chapter_text(
+        "\n\n".join(result)
+    )
 
 
 async def _fetch_api(url):
@@ -128,7 +132,10 @@ async def _fetch_html(url):
     if h1:
         title = h1.get_text(" ", strip=True)
 
-    return {"title": title, "text": "\n\n".join(parts).strip()}
+    return {
+        "title": title,
+        "text": clean_chapter_text("\n\n".join(parts)),
+    }
 
 
 async def fetch_telegraph(url):
