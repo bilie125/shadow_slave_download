@@ -11,6 +11,8 @@ from parsers.telegram_parser import extract_telegraph_from_message
 from services.telegraph import fetch_telegraph
 from services.importers import import_docx, import_links
 
+from services.text_cleaner import clean_chapter_text
+
 router = Router()
 
 
@@ -301,3 +303,68 @@ async def watch_new_chapter(message: Message, db):
             f"[CHANNEL] Ошибка Telegraph "
             f"{chapter_number}: {exc}"
         )
+
+
+@router.message(Command("clean_telegraph"))
+async def clean_telegraph_command(
+    message: Message,
+    db,
+    admin_ids: set[int],
+    bot: Bot,
+):
+    if not is_admin(message, admin_ids):
+        return
+
+    rows = await db.chapters_with_telegraph_text()
+
+    if not rows:
+        await reply_private(
+            message, bot,
+            "В базе нет сохранённых глав Telegraph."
+        )
+        return
+
+    await reply_private(
+        message, bot,
+        f"⏳ Проверяю и очищаю {len(rows)} глав..."
+    )
+
+    changed = 0
+    unchanged = 0
+    errors = []
+
+    for row in rows:
+        try:
+            original = row["text"] or ""
+            cleaned = clean_chapter_text(original)
+
+            if cleaned != original:
+                await db.update_chapter_text(
+                    row["chapter_number"],
+                    cleaned,
+                )
+                changed += 1
+            else:
+                unchanged += 1
+
+        except Exception as exc:
+            errors.append(row["chapter_number"])
+            print(
+                f"Очистка главы "
+                f"{row['chapter_number']}: {exc}"
+            )
+
+    result = (
+        "✅ Проверка завершена.\n\n"
+        f"Всего проверено: {len(rows)}\n"
+        f"Очищено: {changed}\n"
+        f"Без изменений: {unchanged}"
+    )
+
+    if errors:
+        result += (
+            f"\nОшибок: {len(errors)}"
+            f"\nГлавы: {', '.join(map(str, errors[:30]))}"
+        )
+
+    await reply_private(message, bot, result)
